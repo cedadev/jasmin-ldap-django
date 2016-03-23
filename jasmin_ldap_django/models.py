@@ -36,9 +36,6 @@ class TextField(ScalarFieldMixin, models.TextField):
 class EmailField(ScalarFieldMixin, models.EmailField):
     pass
 
-class SlugField(ScalarFieldMixin, models.SlugField):
-    pass
-
 class IntegerField(ScalarFieldMixin, models.IntegerField):
     pass
 
