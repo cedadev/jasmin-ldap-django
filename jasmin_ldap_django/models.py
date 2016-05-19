@@ -9,8 +9,9 @@ __copyright__ = "Copyright 2015 UK Science and Technology Facilities Council"
 from collections import Iterable
 
 from django.db import connections, models, router
-from django.db.models import signals, QuerySet as DefaultQuerySet
+from django.db.models import signals
 from django import forms
+from django.core.exceptions import ImproperlyConfigured
 
 
 class ScalarFieldMixin:
@@ -68,7 +69,10 @@ class ListField(models.Field):
             return [value]
 
 
-class QuerySet(DefaultQuerySet):
+class LDAPQuerySet(models.QuerySet):
+    """
+    Custom queryset for use with LDAP models.
+    """
     def delete(self):
         # Override the delete method to basically iterate and delete each item
         deleted = 0
@@ -79,23 +83,33 @@ class QuerySet(DefaultQuerySet):
 
 
 class LDAPModel(models.Model):
+    """
+    Base class for all models that live in LDAP databases.
+    """
     class Meta:
         abstract = True
 
-    objects = QuerySet.as_manager()
+    objects = LDAPQuerySet.as_manager()
 
     base_dn = None
     object_classes = ['top']
     search_classes = None  # None means use object_classes
 
-    dn = models.CharField(max_length = 250, editable = False, primary_key = True)
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        # Check that there is a field mapping to the CN and that field is a PK
+        self._cn_field = None
+        for field in self._meta.fields:
+            if field.column and field.column.lower() == 'cn' and field.primary_key:
+                self._cn_field = field.name
+        if not self._cn_field:
+            raise ImproperlyConfigured(
+                'LDAP models must have a primary key field mapping to the CN'
+            )
 
     def _build_dn(self):
-        for field in self._meta.fields:
-            if field.column and field.column.lower() == 'cn':
-                value = getattr(self, field.name)
-                return 'cn={},{}'.format(value, self.base_dn) if value else None
-        raise TypeError('LDAP models must have a field mapping to the CN')
+        value = getattr(self, self._cn_field)
+        return 'cn={},{}'.format(value, self.base_dn) if value else None
 
     def save(self, using = None):
         signals.pre_save.send(sender = self.__class__, instance = self)
@@ -108,31 +122,23 @@ class LDAPModel(models.Model):
         attrs = {}
         for field in self._meta.fields:
             # If there is no column, it is not a concrete field
-            if field.name == 'dn' or not field.column: continue
+            if not field.column: continue
             attrs[field.column] = field.get_db_prep_save(getattr(self, field.name),
                                                          connection = connection)
         # Add the object classes to the attributes
         attrs['objectClass'] = self.object_classes
 
-        # If the object already has a DN, we are doing an update
-        if self.dn:
-            # Check if we first need to do a rename
-            if dn.lower() != self.dn.lower():
-                connection.rename_entry(self.dn, dn)
-                self.dn = dn
-            # Then do the update
+        if self._state.adding:
+            connection.create_entry(dn, attrs)
+            created = True
+        else:
             connection.update_entry(dn, attrs)
             created = False
-        # If the object doesn't have a DN, we are doing a create
-        else:
-            connection.create_entry(dn, attrs)
-            self.dn = dn
-            created = True
 
         # If there is a _raw_password attribute, do a password update
         raw_password = getattr(self, '_raw_password', None)
         if raw_password:
-            connection.set_entry_password(self.dn, raw_password)
+            connection.set_entry_password(dn, raw_password)
 
         # Once we have saved, we should no longer be considered in the adding state
         self._state.adding = False
@@ -140,11 +146,11 @@ class LDAPModel(models.Model):
                                                         created = created)
 
     def delete(self, using = None, keep_parents = False):
-        if self.dn:
+        if not self._state.adding:
             signals.pre_delete.send(sender = self.__class__, instance = self)
             using = using or router.db_for_write(self.__class__, instance = self)
             connection = connections[using]
-            connection.delete_entry(self.dn)
+            connection.delete_entry(self._build_dn())
             signals.post_delete.send(sender = self.__class__, instance = self)
 
     def check_password(self, raw_password):
@@ -152,11 +158,11 @@ class LDAPModel(models.Model):
         Verifies that the given raw password matches the password for the account.
         """
         # If the entry has not been saved, the password can't possibly be valid
-        if not self.dn:
+        if self._state.adding:
             return False
         using = router.db_for_read(self.__class__, instance = self)
         connection = connections[using]
-        return connection.check_entry_password(self.dn, raw_password)
+        return connection.check_entry_password(self._build_dn(), raw_password)
 
     def set_password(self, raw_password):
         """
