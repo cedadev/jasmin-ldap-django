@@ -97,6 +97,9 @@ class LDAPModel(models.Model):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # Check that base_dn is set
+        if not self.base_dn:
+            raise ImproperlyConfigured('LDAP models must have a base_dn')
         # Check that there is a field mapping to the CN and that field is a PK
         self._cn_field = None
         for field in self._meta.fields:
@@ -112,6 +115,10 @@ class LDAPModel(models.Model):
         return 'cn={},{}'.format(value, self.base_dn) if value else None
 
     def save(self, using = None):
+        # Since there is no database level integrity checking, run the validation
+        # before saving
+        self.full_clean()
+
         signals.pre_save.send(sender = self.__class__, instance = self)
 
         using = using or router.db_for_write(self.__class__, instance = self)
