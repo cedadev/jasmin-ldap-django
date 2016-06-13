@@ -9,6 +9,7 @@ from django.contrib.admin.utils import lookup_field
 from django.contrib.admin.helpers import AdminReadonlyField
 from django.utils.encoding import smart_text
 from django.utils.html import conditional_escape
+from django.core.exceptions import ObjectDoesNotExist
 
 from .models import ListField
 

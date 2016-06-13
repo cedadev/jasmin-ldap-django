@@ -40,6 +40,9 @@ class EmailField(ScalarFieldMixin, models.EmailField):
 class IntegerField(ScalarFieldMixin, models.IntegerField):
     pass
 
+class PositiveIntegerField(ScalarFieldMixin, models.PositiveIntegerField):
+    pass
+
 
 class ListField(models.Field):
     class FormField(forms.CharField):
