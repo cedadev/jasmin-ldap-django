@@ -99,65 +99,64 @@ class SQLCompiler(compiler.SQLCompiler):
                             pass
             raise NotImplementedError('Unsupported usage: {}'.format(repr(expr)))
 
-        # Create the LDAP query
-        query = self.connection.create_query(self.query.model.base_dn)
+        # Make the LDAP query
+        with self.connection.create_query(self.query.model.base_dn) as query:
+            # Apply any annotations
+            if q_annots:
+                query = query.annotate(**q_annots)
 
-        # Apply any annotations
-        if q_annots:
-            query = query.annotate(**q_annots)
+            # Add filters for the search classes of the model
+            search_classes = self.query.model.search_classes
+            if search_classes is None:
+                search_classes = self.query.model.object_classes
+            for oc in search_classes:
+                query = query.filter(objectClass = oc)
+            # Compile the where expression to a filter and apply
+            if self.query.where:
+                query = query.filter(self._compile(self.query.where))
 
-        # Add filters for the search classes of the model
-        search_classes = self.query.model.search_classes
-        if search_classes is None:
-            search_classes = self.query.model.object_classes
-        for oc in search_classes:
-            query = query.filter(objectClass = oc)
-        # Compile the where expression to a filter and apply
-        if self.query.where:
-            query = query.filter(self._compile(self.query.where))
+            # Apply the field extraction (if no fields are given, select them all)
+            if fields:
+                query = query.select(*fields)
 
-        # Apply the field extraction (if no fields are given, select them all)
-        if fields:
-            query = query.select(*fields)
+            # Make the query distinct if the query is distinct
+            if self.query.distinct:
+                query = query.distinct()
 
-        # Make the query distinct if the query is distinct
-        if self.query.distinct:
-            query = query.distinct()
+            # Apply any orderings
+            if order_by:
+                orderings = []
+                for o, _ in order_by:
+                    if isinstance(o.expression, expressions.Col):
+                        attribute = o.expression.target.column
+                    elif isinstance(o.expression, expressions.Ref):
+                        attribute = o.expression.refs
+                    else:
+                        raise NotImplementedError('Unsupported expression: {}'.format(repr(o)))
+                    if o.descending:
+                        attribute = '-' + attribute
+                    orderings.append(attribute)
+                query = query.order_by(*orderings)
 
-        # Apply any orderings
-        if order_by:
-            orderings = []
-            for o, _ in order_by:
-                if isinstance(o.expression, expressions.Col):
-                    attribute = o.expression.target.column
-                elif isinstance(o.expression, expressions.Ref):
-                    attribute = o.expression.refs
+            # Apply any limits
+            if self.query.low_mark or self.query.high_mark:
+                query = query[self.query.low_mark:self.query.high_mark]
+
+            if result_type == compiler.SINGLE:
+                # If we have aggregations, use them instead
+                if q_aggregates:
+                    result = query.aggregate(**q_aggregates)
+                    return [result.get(n) for n in q_aggregates.keys()]
+                result = query.one()
+                if result is not None:
+                    return [result.get(f, []) for f in fields]
                 else:
-                    raise NotImplementedError('Unsupported expression: {}'.format(repr(o)))
-                if o.descending:
-                    attribute = '-' + attribute
-                orderings.append(attribute)
-            query = query.order_by(*orderings)
-
-        # Apply any limits
-        if self.query.low_mark or self.query.high_mark:
-            query = query[self.query.low_mark:self.query.high_mark]
-
-        if result_type == compiler.SINGLE:
-            # If we have aggregations, use them instead
-            if q_aggregates:
-                result = query.aggregate(**q_aggregates)
-                return [result.get(n) for n in q_aggregates.keys()]
-            result = query.one()
-            if result is not None:
-                return [result.get(f, []) for f in fields]
+                    return None
             else:
-                return None
-        else:
-            # When result type is MULTI, the return value should be a list of
-            # chunks of results
-            # We treat all the results as a single chunk
-            return [[[r.get(f, []) for f in fields] for r in query]]
+                # When result type is MULTI, the return value should be a list of
+                # chunks of results
+                # We treat all the results as a single chunk
+                return [[[r.get(f, []) for f in fields] for r in query]]
 
     def has_results(self):
         return self.execute_sql(compiler.SINGLE) is not None

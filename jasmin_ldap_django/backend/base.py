@@ -6,12 +6,14 @@ is backed by a :py:class:`~jasmin_auth.manager.UserManager`.
 __author__ = "Matt Pryor"
 __copyright__ = "Copyright 2015 UK Science and Technology Facilities Council"
 
+import contextlib
+
 from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.creation import BaseDatabaseCreation
 
-from jasmin_ldap import Server, ConnectionPool, AuthenticationError, Query as LDAPQuery
+from jasmin_ldap import Server, Connection, AuthenticationError, Query as LDAPQuery
 
 
 class DatabaseCreation(BaseDatabaseCreation):
@@ -63,9 +65,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self.ops = DatabaseOperations(self)
         self.autocommit = True
         self._server = Server(self.settings_dict['SERVER'])
-        self._pool = ConnectionPool(self._server,
-                                    self.settings_dict.get('USER', ''),
-                                    self.settings_dict.get('PASSWORD', ''))
+        self._bind_dn = self.settings_dict.get('USER', '')
+        self._bind_pass = self.settings_dict.get('PASSWORD', '')
 
     def ensure_connection(self):
         # This is a NOOP
@@ -77,19 +78,31 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     def close(self):
         self.validate_thread_sharing()
-        if self._pool:
-            self._pool.close_all()
-            self._pool = None
 
+    def _connection(self):
+        return self._server.authenticate(self._bind_dn, self._bind_pass)
+
+    @contextlib.contextmanager
     def create_query(self, base_dn):
-        return LDAPQuery(self._pool, base_dn)
+        """
+        This function is designed to be used as a context manager in a with statement, e.g.:
+
+        ::
+
+            with conn.create_query(base_dn) as query:
+                # ... do stuff with query
+
+        This ensures that the underlying LDAP connection is closed correctly.
+        """
+        with contextlib.closing(self._connection()) as conn:
+            yield LDAPQuery(conn, base_dn)
 
     def create_entry(self, dn, attributes):
-        with self._pool.connection() as conn:
+        with contextlib.closing(self._connection()) as conn:
             return conn.create_entry(dn, attributes)
 
     def update_entry(self, dn, attributes):
-        with self._pool.connection() as conn:
+        with contextlib.closing(self._connection()) as conn:
             return conn.update_entry(dn, attributes)
 
     def check_entry_password(self, dn, password):
@@ -102,13 +115,13 @@ class DatabaseWrapper(BaseDatabaseWrapper):
             return False
 
     def set_entry_password(self, dn, password):
-        with self._pool.connection() as conn:
+        with contextlib.closing(self._connection()) as conn:
             return conn.set_entry_password(dn, password)
 
     def rename_entry(self, old_dn, new_dn):
-        with self._pool.connection() as conn:
+        with contextlib.closing(self._connection()) as conn:
             return conn.rename_entry(old_dn, new_dn)
 
     def delete_entry(self, dn):
-        with self._pool.connection() as conn:
+        with contextlib.closing(self._connection()) as conn:
             return conn.delete_entry(dn)
