@@ -1,6 +1,5 @@
 """
-This module provides plumbing to allow the use of a custom Django DB backend that
-is backed by a :py:class:`~jasmin_auth.manager.UserManager`.
+This module provides a Django database backend for LDAP.
 """
 
 __author__ = "Matt Pryor"

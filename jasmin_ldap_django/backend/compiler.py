@@ -1,6 +1,6 @@
 """
-This module provides a Django ``SQLCompiler`` that is backed by a
-:py:class:`~jasmin_auth.manager.UserManager`.
+This module provides a Django ``SQLCompiler`` implementation that can convert
+a Django query into an ``jasmin_ldap.Query`` for execution on an LDAP database.
 """
 
 __author__ = "Matt Pryor"
