@@ -11,6 +11,7 @@ from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.creation import BaseDatabaseCreation
+from django.db.backends.base.validation import BaseDatabaseValidation
 
 from jasmin_ldap import Server, Connection, AuthenticationError, Query as LDAPQuery
 
@@ -53,6 +54,10 @@ class DatabaseOperations(BaseDatabaseOperations):
         return -1
 
 
+class DatabaseValidation(BaseDatabaseValidation):
+    pass
+
+
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = 'jasmin_ldap'
 
@@ -62,6 +67,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self.creation = DatabaseCreation(self)
         self.features = DatabaseFeatures(self)
         self.ops = DatabaseOperations(self)
+        self.validation = DatabaseValidation(self)
         self.autocommit = True
         self._server = Server(self.settings_dict['SERVER'])
         self._bind_dn = self.settings_dict.get('USER', '')
