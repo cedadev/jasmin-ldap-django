@@ -91,6 +91,7 @@ class LDAPModel(models.Model):
     """
     class Meta:
         abstract = True
+        managed = False
 
     objects = LDAPQuerySet.as_manager()
 
@@ -135,8 +136,9 @@ class LDAPModel(models.Model):
             if not field.column: continue
             attrs[field.column] = field.get_db_prep_save(getattr(self, field.name),
                                                          connection = connection)
-        # Add the object classes to the attributes
-        attrs['objectClass'] = self.object_classes
+        # Only if creating, add the object classes to the attributes
+        if self._state.adding:
+            attrs['objectClass'] = self.object_classes
 
         if self._state.adding:
             connection.create_entry(dn, attrs)
