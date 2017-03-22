@@ -13,8 +13,11 @@ from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.backends.base.validation import BaseDatabaseValidation
 
-from jasmin_ldap import Server, Connection, AuthenticationError, Query as LDAPQuery
+from jasmin_ldap import ServerPool, Connection, AuthenticationError, Query as LDAPQuery
 
+
+import logging
+logger = logging.getLogger(__name__)
 
 class DatabaseCreation(BaseDatabaseCreation):
     def create_test_db(self, *args, **kwargs):
@@ -69,7 +72,10 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self.ops = DatabaseOperations(self)
         self.validation = DatabaseValidation(self)
         self.autocommit = True
-        self._server = Server(self.settings_dict['SERVER'])
+        self._servers = ServerPool(
+            self.settings_dict['PRIMARY'],
+            self.settings_dict.get('REPLICAS', [])
+        )
         self._bind_dn = self.settings_dict.get('USER', '')
         self._bind_pass = self.settings_dict.get('PASSWORD', '')
 
@@ -84,8 +90,8 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     def close(self):
         self.validate_thread_sharing()
 
-    def _connection(self):
-        return self._server.authenticate(self._bind_dn, self._bind_pass)
+    def _connection(self, mode):
+        return Connection.create(self._servers, self._bind_dn, self._bind_pass, mode)
 
     @contextlib.contextmanager
     def create_query(self, base_dn):
@@ -99,34 +105,31 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
         This ensures that the underlying LDAP connection is closed correctly.
         """
-        with contextlib.closing(self._connection()) as conn:
+        logger.debug('Creating query', stack_info = True)
+        with self._connection(Connection.MODE_READONLY) as conn:
             yield LDAPQuery(conn, base_dn)
 
     def create_entry(self, dn, attributes):
-        with contextlib.closing(self._connection()) as conn:
+        with self._connection(Connection.MODE_READWRITE) as conn:
             return conn.create_entry(dn, attributes)
 
     def update_entry(self, dn, attributes):
-        with contextlib.closing(self._connection()) as conn:
+        with self._connection(Connection.MODE_READWRITE) as conn:
             return conn.update_entry(dn, attributes)
 
     def check_entry_password(self, dn, password):
         try:
             # Just create a connection and close it straight away
             # If there is an authentication error, it will throw
-            self._server.authenticate(dn, password).close()
+            Connection.create(self._servers, dn, password).close()
             return True
         except AuthenticationError:
             return False
 
     def set_entry_password(self, dn, password):
-        with contextlib.closing(self._connection()) as conn:
+        with self._connection(Connection.MODE_READWRITE) as conn:
             return conn.set_entry_password(dn, password)
 
-    def rename_entry(self, old_dn, new_dn):
-        with contextlib.closing(self._connection()) as conn:
-            return conn.rename_entry(old_dn, new_dn)
-
     def delete_entry(self, dn):
-        with contextlib.closing(self._connection()) as conn:
+        with self._connection(Connection.MODE_READWRITE) as conn:
             return conn.delete_entry(dn)
