@@ -7,17 +7,25 @@ __copyright__ = "Copyright 2015 UK Science and Technology Facilities Council"
 
 import contextlib
 
+from django.db.backends.base.client import BaseDatabaseClient
 from django.db.backends.base.features import BaseDatabaseFeatures
 from django.db.backends.base.operations import BaseDatabaseOperations
 from django.db.backends.base.base import BaseDatabaseWrapper
 from django.db.backends.base.creation import BaseDatabaseCreation
 from django.db.backends.base.validation import BaseDatabaseValidation
+from django.db.backends.base.introspection import BaseDatabaseIntrospection
 
 from jasmin_ldap import ServerPool, Connection, AuthenticationError, Query as LDAPQuery
 
 
 import logging
 logger = logging.getLogger(__name__)
+
+
+class DatabaseClient(BaseDatabaseClient):
+    def runshell(self):
+        raise NotImplementedError('Not currently supported')
+
 
 class DatabaseCreation(BaseDatabaseCreation):
     def create_test_db(self, *args, **kwargs):
@@ -61,16 +69,22 @@ class DatabaseValidation(BaseDatabaseValidation):
     pass
 
 
+class DatabaseIntrospection(BaseDatabaseIntrospection):
+    pass
+
+
 class DatabaseWrapper(BaseDatabaseWrapper):
     vendor = 'jasmin_ldap'
 
+    client_class = DatabaseClient
+    creation_class = DatabaseCreation
+    features_class = DatabaseFeatures
+    introspection_class = DatabaseIntrospection
+    ops_class = DatabaseOperations
+    validation_class = DatabaseValidation
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.charset = "utf-8"
-        self.creation = DatabaseCreation(self)
-        self.features = DatabaseFeatures(self)
-        self.ops = DatabaseOperations(self)
-        self.validation = DatabaseValidation(self)
         self.autocommit = True
         self._servers = ServerPool(
             self.settings_dict['PRIMARY'],
