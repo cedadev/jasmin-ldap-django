@@ -45,7 +45,7 @@ class SQLCompiler(compiler.SQLCompiler):
             return node
         raise TypeError('Unsupported node: {}'.format(repr(expr)))
 
-    def execute_sql(self, result_type = compiler.MULTI, chunked_fetch = False):
+    def execute_sql(self, result_type = compiler.MULTI, chunked_fetch = False, chunk_size = 100):
         if result_type not in [compiler.SINGLE, compiler.MULTI]:
             return None
 
