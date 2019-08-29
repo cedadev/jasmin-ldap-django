@@ -83,6 +83,18 @@ class DatabaseWrapper(BaseDatabaseWrapper):
     ops_class = DatabaseOperations
     validation_class = DatabaseValidation
 
+    # We have implemented our own compiler, so the operators need to look like SQL
+    operators = {
+        'exact': '= %s',
+        'iexact': '= UPPER(%s)',
+        'contains': 'LIKE %s',
+        'icontains': 'LIKE UPPER(%s)',
+        'startswith': 'LIKE %s',
+        'endswith': 'LIKE %s',
+        'istartswith': 'LIKE UPPER(%s)',
+        'iendswith': 'LIKE UPPER(%s)',
+    }
+
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.autocommit = True
@@ -94,7 +106,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
         self._bind_pass = self.settings_dict.get('PASSWORD', '')
 
     def ensure_connection(self):
-        # This is a NOOP
+        # This is a NOOP
         pass
 
     def _set_autocommit(self, autocommit):

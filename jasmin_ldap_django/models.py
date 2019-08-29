@@ -55,7 +55,7 @@ class ListField(models.Field):
             return [s for s in map(super().to_python, value.split(',')) if s]
 
     def formfield(self, **kwargs):
-        # Use a custom widget that knows how to interpret lists
+        # Use a custom widget that knows how to interpret lists
         defaults = { 'form_class' : self.FormField }
         defaults.update(kwargs)
         return super().formfield(**defaults)
@@ -132,11 +132,11 @@ class LDAPModel(models.Model):
         dn = self._build_dn()
         attrs = {}
         for field in self._meta.fields:
-            # If there is no column, it is not a concrete field
+            # If there is no column, it is not a concrete field
             if not field.column: continue
             attrs[field.column] = field.get_db_prep_save(getattr(self, field.name),
                                                          connection = connection)
-        # Only if creating, add the object classes to the attributes
+        # Only if creating, add the object classes to the attributes
         if self._state.adding:
             attrs['objectClass'] = self.object_classes
 
