@@ -6,33 +6,33 @@ __author__ = "Matt Pryor"
 __copyright__ = "Copyright 2015 UK Science and Technology Facilities Council"
 
 import contextlib
-
-from django.db.backends.base.client import BaseDatabaseClient
-from django.db.backends.base.features import BaseDatabaseFeatures
-from django.db.backends.base.operations import BaseDatabaseOperations
-from django.db.backends.base.base import BaseDatabaseWrapper
-from django.db.backends.base.creation import BaseDatabaseCreation
-from django.db.backends.base.validation import BaseDatabaseValidation
-from django.db.backends.base.introspection import BaseDatabaseIntrospection
-
-from jasmin_ldap import ServerPool, Connection, AuthenticationError, Query as LDAPQuery
-
-
 import logging
+
+from django.db.backends.base.base import BaseDatabaseWrapper
+from django.db.backends.base.client import BaseDatabaseClient
+from django.db.backends.base.creation import BaseDatabaseCreation
+from django.db.backends.base.features import BaseDatabaseFeatures
+from django.db.backends.base.introspection import BaseDatabaseIntrospection
+from django.db.backends.base.operations import BaseDatabaseOperations
+from django.db.backends.base.validation import BaseDatabaseValidation
+from jasmin_ldap import AuthenticationError, Connection
+from jasmin_ldap import Query as LDAPQuery
+from jasmin_ldap import ServerPool
+
 logger = logging.getLogger(__name__)
 
 
 class DatabaseClient(BaseDatabaseClient):
     def runshell(self):
-        raise NotImplementedError('Not currently supported')
+        raise NotImplementedError("Not currently supported")
 
 
 class DatabaseCreation(BaseDatabaseCreation):
     def create_test_db(self, *args, **kwargs):
-        raise NotImplementedError('Not currently supported')
+        raise NotImplementedError("Not currently supported")
 
     def destroy_test_db(self, *args, **kwargs):
-        raise NotImplementedError('Not currently supported')
+        raise NotImplementedError("Not currently supported")
 
 
 class DatabaseFeatures(BaseDatabaseFeatures):
@@ -56,7 +56,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
 
 
 class DatabaseOperations(BaseDatabaseOperations):
-    compiler_module = '.'.join(__name__.split('.')[:-1]) + '.compiler'
+    compiler_module = ".".join(__name__.split(".")[:-1]) + ".compiler"
 
     def quote_name(self, name):
         return name
@@ -74,7 +74,7 @@ class DatabaseIntrospection(BaseDatabaseIntrospection):
 
 
 class DatabaseWrapper(BaseDatabaseWrapper):
-    vendor = 'jasmin_ldap'
+    vendor = "jasmin_ldap"
 
     client_class = DatabaseClient
     creation_class = DatabaseCreation
@@ -85,25 +85,24 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
     # We have implemented our own compiler, so the operators need to look like SQL
     operators = {
-        'exact': '= %s',
-        'iexact': '= UPPER(%s)',
-        'contains': 'LIKE %s',
-        'icontains': 'LIKE UPPER(%s)',
-        'startswith': 'LIKE %s',
-        'endswith': 'LIKE %s',
-        'istartswith': 'LIKE UPPER(%s)',
-        'iendswith': 'LIKE UPPER(%s)',
+        "exact": "= %s",
+        "iexact": "= UPPER(%s)",
+        "contains": "LIKE %s",
+        "icontains": "LIKE UPPER(%s)",
+        "startswith": "LIKE %s",
+        "endswith": "LIKE %s",
+        "istartswith": "LIKE UPPER(%s)",
+        "iendswith": "LIKE UPPER(%s)",
     }
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
         self.autocommit = True
         self._servers = ServerPool(
-            self.settings_dict['PRIMARY'],
-            self.settings_dict.get('REPLICAS', [])
+            self.settings_dict["PRIMARY"], self.settings_dict.get("REPLICAS", [])
         )
-        self._bind_dn = self.settings_dict.get('USER', '')
-        self._bind_pass = self.settings_dict.get('PASSWORD', '')
+        self._bind_dn = self.settings_dict.get("USER", "")
+        self._bind_pass = self.settings_dict.get("PASSWORD", "")
 
     def ensure_connection(self):
         # This is a NOOP
@@ -131,7 +130,7 @@ class DatabaseWrapper(BaseDatabaseWrapper):
 
         This ensures that the underlying LDAP connection is closed correctly.
         """
-        logger.debug('Creating query', stack_info = True)
+        logger.debug("Creating query", stack_info=True)
         with self._connection(Connection.MODE_READONLY) as conn:
             yield LDAPQuery(conn, base_dn)
 

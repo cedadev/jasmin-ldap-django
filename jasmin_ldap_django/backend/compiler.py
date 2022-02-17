@@ -6,14 +6,15 @@ a Django query into an ``jasmin_ldap.Query`` for execution on an LDAP database.
 __author__ = "Matt Pryor"
 __copyright__ = "Copyright 2015 UK Science and Technology Facilities Council"
 
-import functools, operator
+import functools
+import operator
 from collections import OrderedDict
 
 from django.db.models import aggregates, expressions, lookups
 from django.db.models.sql import compiler, where
-
-from jasmin_ldap.filters import Expression, AndNode, OrNode, NotNode
-from jasmin_ldap import annotations as ldap_annot, aggregations as ldap_aggr
+from jasmin_ldap import aggregations as ldap_aggr
+from jasmin_ldap import annotations as ldap_annot
+from jasmin_ldap.filters import AndNode, Expression, NotNode, OrNode
 
 
 class SQLCompiler(compiler.SQLCompiler):
@@ -29,7 +30,7 @@ class SQLCompiler(compiler.SQLCompiler):
             if isinstance(expr.lhs, expressions.Col):
                 return Expression(expr.lhs.target.column, expr.lookup_name, expr.rhs)
             else:
-                raise TypeError('Filtering on annotations is not supported')
+                raise TypeError("Filtering on annotations is not supported")
         elif isinstance(expr, where.WhereNode):
             children = expr.children
             if len(children) == 1:
@@ -39,13 +40,15 @@ class SQLCompiler(compiler.SQLCompiler):
             elif expr.connector == where.OR:
                 node = OrNode(*[self._compile(c) for c in expr.children])
             else:
-                raise TypeError('Unsupported connector: {}'.format(expr.connector))
+                raise TypeError("Unsupported connector: {}".format(expr.connector))
             if expr.negated:
                 node = NotNode(node)
             return node
-        raise TypeError('Unsupported node: {}'.format(repr(expr)))
+        raise TypeError("Unsupported node: {}".format(repr(expr)))
 
-    def execute_sql(self, result_type = compiler.MULTI, chunked_fetch = False, chunk_size = 100):
+    def execute_sql(
+        self, result_type=compiler.MULTI, chunked_fetch=False, chunk_size=100
+    ):
         if result_type not in [compiler.SINGLE, compiler.MULTI]:
             return None
 
@@ -65,20 +68,23 @@ class SQLCompiler(compiler.SQLCompiler):
                 if len(expr.source_expressions) == 1:
                     se = expr.source_expressions[0]
                     # Explicitly support count for the whole query
-                    if isinstance(expr, aggregates.Count) and  \
-                       isinstance(se, expressions.Star):
+                    if isinstance(expr, aggregates.Count) and isinstance(
+                        se, expressions.Star
+                    ):
                         q_aggregates[alias] = ldap_aggr.Count()
                         continue
                     expr_name = expr.__class__.__name__
                     # Get the target field from the source expression
                     if isinstance(se, expressions.Col):
-                        name = alias or se.target.name + '__' + expr_name.lower()
+                        name = alias or se.target.name + "__" + expr_name.lower()
                         target = se.target.column
                     elif isinstance(se, expressions.Ref):
-                        name = alias or se.target.name + '__' + expr_name.lower()
+                        name = alias or se.target.name + "__" + expr_name.lower()
                         target = se.refs
                     else:
-                        raise NotImplementedError('Unsupported usage: {}'.format(repr(expr)))
+                        raise NotImplementedError(
+                            "Unsupported usage: {}".format(repr(expr))
+                        )
                     # We rely on the LDAP annotations and aggregations having the
                     # same names as the Django ones
                     if expr.is_summary:
@@ -98,7 +104,7 @@ class SQLCompiler(compiler.SQLCompiler):
                             pass
             elif isinstance(expr, expressions.RawSQL):
                 continue
-            raise NotImplementedError('Unsupported usage: {}'.format(repr(expr)))
+            raise NotImplementedError("Unsupported usage: {}".format(repr(expr)))
 
         # Make the LDAP query
         with self.connection.create_query(self.query.model.base_dn) as query:
@@ -111,7 +117,7 @@ class SQLCompiler(compiler.SQLCompiler):
             if search_classes is None:
                 search_classes = self.query.model.object_classes
             for oc in search_classes:
-                query = query.filter(objectClass = oc)
+                query = query.filter(objectClass=oc)
             # Compile the where expression to a filter and apply
             if self.query.where:
                 query = query.filter(self._compile(self.query.where))
@@ -133,15 +139,17 @@ class SQLCompiler(compiler.SQLCompiler):
                     elif isinstance(o.expression, expressions.Ref):
                         attribute = o.expression.refs
                     else:
-                        raise NotImplementedError('Unsupported expression: {}'.format(repr(o)))
+                        raise NotImplementedError(
+                            "Unsupported expression: {}".format(repr(o))
+                        )
                     if o.descending:
-                        attribute = '-' + attribute
+                        attribute = "-" + attribute
                     orderings.append(attribute)
                 query = query.order_by(*orderings)
 
             # Apply any limits
             if self.query.low_mark or self.query.high_mark:
-                query = query[self.query.low_mark:self.query.high_mark]
+                query = query[self.query.low_mark : self.query.high_mark]
 
             if result_type == compiler.SINGLE:
                 # If we have aggregations, use them instead
@@ -164,18 +172,18 @@ class SQLCompiler(compiler.SQLCompiler):
 
 
 class SQLInsertCompiler(compiler.SQLInsertCompiler, SQLCompiler):
-    def execute_sql(self, result_type = compiler.MULTI):
-        raise NotImplementedError('Bulk insert is not supported for LDAP')
+    def execute_sql(self, result_type=compiler.MULTI):
+        raise NotImplementedError("Bulk insert is not supported for LDAP")
 
 
 class SQLUpdateCompiler(compiler.SQLUpdateCompiler, SQLCompiler):
-    def execute_sql(self, result_type = compiler.MULTI):
-        raise NotImplementedError('Bulk update is not supported for LDAP')
+    def execute_sql(self, result_type=compiler.MULTI):
+        raise NotImplementedError("Bulk update is not supported for LDAP")
 
 
 class SQLDeleteCompiler(compiler.SQLDeleteCompiler, SQLCompiler):
-    def execute_sql(self, result_type = compiler.MULTI):
-        raise NotImplementedError('Bulk delete is not supported for LDAP')
+    def execute_sql(self, result_type=compiler.MULTI):
+        raise NotImplementedError("Bulk delete is not supported for LDAP")
 
 
 class SQLAggregateCompiler(compiler.SQLAggregateCompiler, SQLCompiler):
