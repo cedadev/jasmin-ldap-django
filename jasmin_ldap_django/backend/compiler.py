@@ -96,6 +96,8 @@ class SQLCompiler(compiler.SQLCompiler):
                             continue
                         except AttributeError:
                             pass
+            elif isinstance(expr, expressions.RawSQL):
+                continue
             raise NotImplementedError('Unsupported usage: {}'.format(repr(expr)))
 
         # Make the LDAP query
