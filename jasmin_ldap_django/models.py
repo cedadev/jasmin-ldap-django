@@ -6,7 +6,7 @@ manipulating JASMIN user accounts.
 __author__ = "Matt Pryor"
 __copyright__ = "Copyright 2015 UK Science and Technology Facilities Council"
 
-from collections import Iterable
+import collections.abc
 
 from django import forms
 from django.core.exceptions import ImproperlyConfigured
@@ -25,7 +25,7 @@ class ScalarFieldMixin:
 
     def to_python(self, value):
         # If the value is an iterable, extract the first element
-        if isinstance(value, Iterable) and not isinstance(value, str):
+        if isinstance(value, collections.abc.Iterable) and not isinstance(value, str):
             value = next(iter(value), None)
         return super().to_python(value)
 
@@ -53,7 +53,9 @@ class PositiveIntegerField(ScalarFieldMixin, models.PositiveIntegerField):
 class ListField(models.Field):
     class FormField(forms.CharField):
         def prepare_value(self, value):
-            if isinstance(value, Iterable) and not isinstance(value, str):
+            if isinstance(value, collections.abc.Iterable) and not isinstance(
+                value, str
+            ):
                 return ", ".join(value)
             return value
 
@@ -72,7 +74,7 @@ class ListField(models.Field):
     def to_python(self, value):
         if value is None:
             return []
-        elif isinstance(value, Iterable) and not isinstance(value, str):
+        elif isinstance(value, collections.abc.Iterable) and not isinstance(value, str):
             return list(value)
         else:
             return [value]
