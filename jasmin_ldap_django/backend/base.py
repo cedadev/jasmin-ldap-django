@@ -53,6 +53,7 @@ class DatabaseFeatures(BaseDatabaseFeatures):
     supports_select_for_update_with_limit = False
     supports_transactions = False
     supports_stddev = False
+    has_case_insensitive_like = True
 
 
 class DatabaseOperations(BaseDatabaseOperations):

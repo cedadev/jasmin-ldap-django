@@ -63,6 +63,8 @@ class SQLCompiler(compiler.SQLCompiler):
                 # This is a field extraction
                 fields.append(expr.target.column)
                 continue
+            elif isinstance(expr, expressions.Value):
+                continue
             elif isinstance(expr, aggregates.Aggregate):
                 # We only support aggregates with one source expression
                 if len(expr.source_expressions) == 1:
